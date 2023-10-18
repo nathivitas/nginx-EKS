@@ -3,6 +3,7 @@
 
 provider "aws" {
   region = var.region
+  profile = "vscode"
 }
 
 # Filter out local zones, which are not currently supported 
@@ -21,6 +22,12 @@ locals {
 resource "random_string" "suffix" {
   length  = 8
   special = false
+}
+data "aws_vpc" "existing" {
+  filter {
+    name   = "tag:Name"
+    values = ["naty"]
+  }
 }
 
 module "vpc" {
@@ -50,16 +57,27 @@ module "vpc" {
   }
 }
 
+data "aws_subnets" "existing" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.existing.id]
+  }
+}
+
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "19.15.3"
 
   cluster_name    = local.cluster_name
-  cluster_version = "1.27"
-
-  vpc_id                         = module.vpc.vpc_id
-  subnet_ids                     = module.vpc.private_subnets
+  cluster_version = "1.28"
+  vpc_id                         = data.aws_vpc.existing.id
+  subnet_ids                     = tolist(data.aws_subnets.existing.ids)
   cluster_endpoint_public_access = true
+
+  # vpc_id                         = module.vpc.vpc_id
+  # subnet_ids                     = module.vpc.private_subnets
+  # cluster_endpoint_public_access = true
 
   eks_managed_node_group_defaults = {
     ami_type = "AL2_x86_64"
